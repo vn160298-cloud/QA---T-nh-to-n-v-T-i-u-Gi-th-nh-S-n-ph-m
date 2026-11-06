@@ -40,14 +40,36 @@ export const lists = { async render(el, _p, { rerender }) {
 export const io = { async render(el, _p, { rerender }) {
   el.append(h('h1', {}, 'Nhập / Xuất Excel'));
   const xl = () => import('../xl.js');
-  el.append(h('div', { class: 'card' }, h('h3', {}, '1. Nhập dữ liệu từ Excel'),
-    h('p', { class: 'muted' }, 'Dùng mẫu chuẩn để nhập nguyên liệu, giá, chỉ tiêu, hàm lượng, sản phẩm và công thức (kể cả công thức cũ). App kiểm tra từng dòng và cho xem trước trước khi ghi.'),
-    h('div', { class: 'row' }, h('button', { class: 'btn', onClick: async () => (await xl()).downloadTemplate() }, '⬇ Tải mẫu nhập (.xlsx)'),
-      can('ingredients', 'w') ? (() => { const f = h('input', { type: 'file', accept: '.xlsx,.xls,.xlsm', class: 'hide' }); f.addEventListener('change', async () => { if (f.files[0]) await doImport(f.files[0], rerender); f.value = ''; }); return h('div', {}, f, h('button', { class: 'btn primary', onClick: () => f.click() }, '⬆ Chọn file để nhập')); })() : h('span', { class: 'muted small' }, 'Bạn không có quyền nhập dữ liệu.'))));
-  el.append(h('div', { class: 'card' }, h('h3', {}, '2. Xuất Excel'), h('div', { class: 'row' },
-    h('button', { class: 'btn', onClick: async () => (await xl()).exportPriceList() }, '⬇ Bảng giá nguyên liệu'),
-    h('button', { class: 'btn', onClick: async () => (await xl()).exportCostBoard() }, '⬇ Giá thành tất cả công thức')),
+  const picker = (label, kind = 'primary') => {
+    if (!can('ingredients', 'w')) return h('span', { class: 'muted small' }, 'Bạn không có quyền nhập dữ liệu.');
+    const f = h('input', { type: 'file', accept: '.xlsx,.xls,.xlsm', class: 'hide' });
+    f.addEventListener('change', async () => { if (f.files[0]) await doImport(f.files[0], rerender); f.value = ''; });
+    return h('div', {}, f, h('button', { class: 'btn ' + kind, onClick: () => f.click() }, label));
+  };
+  el.append(h('div', { class: 'card' }, h('h3', {}, '1. Nhập nguyên liệu + giá'),
+    h('p', { class: 'muted' }, 'Tải file mẫu (đúng file "file nguyên liệu + giá.xlsx" của công ty), điền hoặc sửa rồi chọn file để nhập. App kiểm tra từng dòng và cho xem trước trước khi ghi.'),
+    table(['Cột', 'Cách điền'], [
+      ['Mã', 'Mã nguyên liệu theo WMS. Trùng mã nhưng khác tên thì app thêm đuôi -2, -3…'],
+      ['Tên NL', 'Tên nguyên liệu / phụ gia'],
+      ['Nhóm', 'Nguyên liệu, Phụ gia, Bao bì… Để trống: có Liều sử dụng thì xếp Phụ gia, còn lại Nguyên liệu'],
+      ['Đơn vị', 'g, kg, lít, ml, cái. Giá ở cột bên cạnh tính theo đơn vị này'],
+      ['Nhà cung cấp', 'Tên nhà cung cấp'],
+      ['Gía chưa Vat/g', 'Giá chưa VAT trên 1 đơn vị (ví dụ 300 đ/g)'],
+      ['Liều sử dụng', 'Khoảng % khối lượng công thức, ví dụ 0,1-5. Điền "-" nếu không giới hạn'],
+    ]),
+    h('div', { class: 'row', style: { marginTop: '10px' } },
+      h('button', { class: 'btn', onClick: async () => (await xl()).downloadTemplate() }, '⬇ Tải mẫu nhập (file nguyên liệu + giá.xlsx)'),
+      picker('⬆ Chọn file để nhập')),
+    h('p', { class: 'small muted', style: { marginTop: '8px' } }, 'Loại giá (Kế hoạch / Thực tế / Ước tính) và ngày hiệu lực chọn ở bước xem trước. Nhập lại file thì giá không đổi được bỏ qua, giá đổi được thêm vào lịch sử.')));
+  el.append(h('div', { class: 'card' }, h('h3', {}, '2. Xuất Excel'),
+    h('p', { class: 'muted' }, 'Xuất nguyên liệu + giá theo cùng bố cục file mẫu (giá quy về đ/g), sửa xong nhập lại được.'),
+    h('div', { class: 'row' },
+      h('button', { class: 'btn', onClick: async () => (await xl()).exportPriceList() }, '⬇ Nguyên liệu + giá (giá ' + getSettings().defaultBasis + ')'),
+      h('button', { class: 'btn', onClick: async () => (await xl()).exportCostBoard() }, '⬇ Giá thành tất cả công thức')),
     h('p', { class: 'small muted' }, 'Từng công thức, so sánh phiên bản, tiết kiệm và mô phỏng có nút xuất Excel ngay trong màn hình tương ứng.')));
+  el.append(h('div', { class: 'card' }, h('h3', {}, 'Nâng cao: nhập chỉ tiêu, hàm lượng, sản phẩm, công thức'),
+    h('p', { class: 'muted' }, 'Dùng sau khi nguyên liệu đã có trong app. Mẫu nâng cao gồm các sheet chỉ tiêu, hàm lượng, sản phẩm, công thức, chi phí khác, yêu cầu chất lượng (cột "Mã nguyên liệu" phải trùng cột Mã ở file nguyên liệu + giá).'),
+    h('div', { class: 'row' }, h('button', { class: 'btn', onClick: async () => (await xl()).downloadTemplateAdvanced() }, '⬇ Tải mẫu nâng cao'), picker('⬆ Chọn file để nhập', ''))));
   el.append(h('div', { class: 'card' }, h('h3', {}, '3. Sao lưu / khôi phục (JSON)'),
     h('p', { class: 'muted' }, 'Sao lưu toàn bộ dữ liệu vào một file. Có thể dùng để chuyển dữ liệu từ chế độ thử sang đám mây: sao lưu → đăng nhập tài khoản đám mây → khôi phục.'),
     h('div', { class: 'row' }, h('button', { class: 'btn', onClick: async () => (await xl()).backupJson() }, '⬇ Sao lưu'),

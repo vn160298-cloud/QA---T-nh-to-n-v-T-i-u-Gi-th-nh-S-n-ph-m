@@ -26,7 +26,7 @@ export async function render(el, _p, { rerender }) {
       const lp = i.bomFormulaId ? null : latestPrice(ctx, i.id, st.defaultBasis);
       const old = lp?.date && (Date.now() - new Date(lp.date)) / 86400000 > st.priceStaleDays;
       return h('div', { class: 'item', onClick: () => edit(i, 'info', rerender) },
-        h('div', { class: 'grow' }, h('div', { class: 't1' }, i.name, i.active === false ? chip('Ngừng', 'bad') : null), h('div', { class: 't2' }, [i.code, i.category, i.supplier].filter(Boolean).join(' · '))),
+        h('div', { class: 'grow' }, h('div', { class: 't1' }, i.name, i.active === false ? chip('Ngừng', 'bad') : null), h('div', { class: 't2' }, [i.code, i.category, i.supplier, i.doseText ? 'liều ' + i.doseText + '%' : ''].filter(Boolean).join(' · '))),
         h('div', { class: 'right' },
           i.bomFormulaId ? h('div', { class: 'muted small' }, 'theo công thức')
             : lp ? h('div', {}, h('div', { class: 'bold mono' }, vnd(lp.price, lp.price < 100 ? 2 : 0) + ' /' + i.priceUnit), h('div', { class: 'small ' + (old ? 'delta-up' : 'muted') }, (lp.fallback ? lp.type + ' · ' : '') + fmtDate(lp.date)))
@@ -40,7 +40,7 @@ export async function render(el, _p, { rerender }) {
 
 // ---------- hộp thoại sửa nguyên liệu ----------
 export function edit(orig, startTab, onDone) {
-  const d = orig ? clone(orig) : { code: nextCode(), name: '', category: 'Nguyên liệu', supplier: '', priceUnit: 'kg', yield: 1, substGroup: '', bomFormulaId: '', stock: null, moq: null, supplyNote: '', lots: [], activeLotId: '', active: true, note: '' };
+  const d = orig ? clone(orig) : { code: nextCode(), name: '', category: 'Nguyên liệu', supplier: '', priceUnit: 'g', yield: 1, substGroup: '', bomFormulaId: '', stock: null, moq: null, supplyNote: '', lots: [], activeLotId: '', active: true, note: '' };
   let tab = startTab; let changed = false;
   const canEdit = can('ingredients', 'w');
   const m = openModal({ title: orig ? orig.name : 'Nguyên liệu mới', wide: true, body: '', onClose: () => { if (changed) onDone?.(); } });
@@ -88,7 +88,7 @@ export function edit(orig, startTab, onDone) {
       bomWrap,
       h('div', { class: 'grid3' },
         field('Nhà cung cấp', listSelect({ key: 'suppliers', value: d.supplier, onChange: (v) => (d.supplier = v), disabled: !canEdit })),
-        field('Đơn vị của giá', plainSelect({ items: UNITS, value: d.priceUnit, onChange: (v) => (d.priceUnit = v) }), 'kg, lít: công thức nhập theo g/ml'),
+        field('Đơn vị của giá', plainSelect({ items: UNITS, value: d.priceUnit, onChange: (v) => (d.priceUnit = v) }), 'Giá tính theo đơn vị này (vd g). Công thức nhập lượng theo gam'),
         field('Định mức mặc định (yield)', numInput({ value: d.yield, onInput: (v) => (d.yield = v ?? 1), readOnly: !canEdit }), 'Nguyên liệu thô = lượng dùng × định mức')),
       h('div', { class: 'grid3' },
         field('Nhóm thay thế', listSelect({ key: 'substGroups', value: d.substGroup, onChange: (v) => (d.substGroup = v), disabled: !canEdit }), 'Tối ưu có thể đề xuất đổi trong cùng nhóm (cần test lại)'),
@@ -109,12 +109,12 @@ export function edit(orig, startTab, onDone) {
     const latest = types.map((t) => hist.find((p) => p.type === t)).filter(Boolean);
     const np = { price: null, type: st.defaultBasis, date: today(), source: '', note: '' };
     const wrap = h('div', { class: 'stack' });
-    wrap.append(h('div', { class: 'card flat' }, h('h3', {}, 'Giá hiện hành (đ/' + unit + ')'),
+    wrap.append(h('div', { class: 'card flat' }, h('h3', {}, 'Giá hiện hành, chưa VAT (đ/' + unit + ')'),
       latest.length ? h('div', { class: 'row' }, latest.map((p) => h('div', { class: 'kpi', style: { minWidth: '150px' } }, h('div', { class: 'v mono', style: { fontSize: '19px' } }, vnd(p.price, p.price < 100 ? 2 : 0)), h('div', { class: 'l' }, p.type + ' · ' + fmtDate(p.date))))) : h('div', { class: 'muted' }, 'Chưa có giá.')));
     if (can('prices', 'w')) {
       const priceIn = numInput({ value: null, onInput: (v) => (np.price = v), placeholder: 'VD: 18000' });
       wrap.append(h('div', { class: 'card flat' }, h('h3', {}, 'Thêm / cập nhật giá'),
-        h('div', { class: 'grid3' }, field('Giá mới (đ/' + unit + ')', priceIn), field('Loại giá', listSelect({ key: 'priceTypes', value: np.type, onChange: (v) => (np.type = v), allowAdd: false })), field('Có hiệu lực từ', Object.assign(h('input', { type: 'date', onChange: (e) => (np.date = e.target.value) }), { value: np.date }))),
+        h('div', { class: 'grid3' }, field('Giá chưa VAT mới (đ/' + unit + ')', priceIn), field('Loại giá', listSelect({ key: 'priceTypes', value: np.type, onChange: (v) => (np.type = v), allowAdd: false })), field('Có hiệu lực từ', Object.assign(h('input', { type: 'date', onChange: (e) => (np.date = e.target.value) }), { value: np.date }))),
         h('div', { class: 'grid2', style: { marginTop: '8px' } }, field('Nguồn (báo giá, hợp đồng, ước tính…)', textInput({ value: '', onInput: (v) => (np.source = v) })), field('Ghi chú', textInput({ value: '', onInput: (v) => (np.note = v) }))),
         h('div', { class: 'row', style: { marginTop: '10px' } }, h('button', { class: 'btn primary', onClick: async () => {
           if (np.price == null || np.price < 0) { toast('Hãy nhập giá hợp lệ.', 'bad'); return; }

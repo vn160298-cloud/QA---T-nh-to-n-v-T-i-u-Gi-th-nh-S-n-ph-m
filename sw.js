@@ -1,5 +1,5 @@
 // Service worker: giữ khung ứng dụng để mở được khi mạng yếu; dữ liệu đám mây luôn lấy trực tiếp từ máy chủ.
-const CACHE = 'tcc-shell-v1';
+const CACHE = 'tcc-shell-v2';
 const SHELL = [
   './', './index.html', './manifest.webmanifest', './css/style.css',
   './js/main.js', './js/config.js', './js/util.js', './js/defaults.js', './js/store.js', './js/calc.js',
@@ -8,7 +8,7 @@ const SHELL = [
   './js/views/criteria.js', './js/views/optimize.js', './js/views/approvals.js', './js/views/simulate.js',
   './js/views/reports.js', './js/views/admin.js',
   './vendor/supabase.js', './vendor/solver.js', './vendor/xlsx.full.min.js',
-  './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'
+  './templates/file-nguyen-lieu-gia.xlsx', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'
 ];
 
 self.addEventListener('install', (e) => {

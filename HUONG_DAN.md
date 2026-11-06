@@ -76,9 +76,9 @@ Mở từ biểu tượng mới sẽ chạy toàn màn hình, không có thanh �
 Ở chế độ thử: **Thêm → Nhập/Xuất Excel → Sao lưu** (file JSON). Kết nối đám mây, đăng nhập bằng tài khoản Quản trị, rồi **Khôi phục từ file**.
 Dữ liệu thật của công ty nên nhập bằng **Mẫu nhập Excel** (cùng màn hình đó). Mẫu có sheet hướng dẫn và các dòng ví dụ.
 
-**Nhập nguyên liệu và giá từ một bảng** (sheet `NguyenLieu_Gia`, đúng bố cục file "file nguyên liệu + giá.xlsx"):
+**Nhập nguyên liệu và giá từ một bảng** (nút **Tải mẫu nhập** tải đúng file "file nguyên liệu + giá.xlsx" của công ty):
 
-| Mã | Tên NL | Nhóm | Đơn vị | Nhà cung cấp | Giá chưa VAT | Liều sử dụng |
+| Mã | Tên NL | Nhóm | Đơn vị | Nhà cung cấp | Gía chưa Vat/g | Liều sử dụng |
 |---|---|---|---|---|---|---|
 | 121345 | Chất tạo cấu trúc 1 | (trống) | g | Brenntag | 300 | 0,1-5 |
 
@@ -86,6 +86,7 @@ Dữ liệu thật của công ty nên nhập bằng **Mẫu nhập Excel** (cù
 - **Nhóm trống**: có Liều sử dụng thì xếp Phụ gia, còn lại là Nguyên liệu. Nên điền cột Nhóm cho chính xác.
 - **Liều sử dụng** (`0,1-5`, `-` là không giới hạn) hiểu là khoảng % khối lượng công thức; dùng làm giới hạn mặc định khi tối ưu và cảnh báo trong công thức.
 - **Mã trùng, tên khác**: app đổi thành `mã-2`, `mã-3`… và báo ở phần "Lưu ý". Hãy sửa mã trong file gốc.
+- Nút **Xuất nguyên liệu + giá** tạo file cùng bố cục (giá quy về đ/g) để sửa rồi nhập lại. Công thức, chỉ tiêu, hàm lượng nhập bằng **Mẫu nâng cao** ở cuối trang.
 - Loại giá và ngày hiệu lực chọn ở bước xem trước. Nhập lại file: giá không đổi thì bỏ qua, giá đổi thì thêm vào lịch sử, không tạo nguyên liệu trùng.
 
 ## 8. Việc cần làm cho bảo mật

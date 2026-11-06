@@ -1,7 +1,7 @@
 // Nhập / xuất Excel (SheetJS) và sao lưu JSON
-import { all, get, saveMany, save, addToList, getList, S, can } from './store.js';
-import { formulaCost, qualitySummary, fLabel, mkCtx, refreshSnapshots, REQ_LABEL } from './calc.js';
-import { STATUSES, UNITS, COLLS } from './defaults.js';
+import { all, get, saveMany, save, addToList, getList, getSettings, S, can } from './store.js';
+import { formulaCost, qualitySummary, fLabel, mkCtx, refreshSnapshots, latestPrice, REQ_LABEL } from './calc.js';
+import { STATUSES, UNITS, UNIT_F, COLLS } from './defaults.js';
 import { uid, today, normalize, parseNum, download, nowIso, clone } from './util.js';
 
 const X = () => window.XLSX;
@@ -18,47 +18,59 @@ const SHEETS = {
   YeuCau: ['Mã SP', 'Biến thể', 'Phiên bản', 'Chỉ tiêu', 'Tối thiểu', 'Tối đa', 'Dung sai'],
 };
 const SAMPLE = {
-  NguyenLieu: [['NL900', 'Coconut Water', 'Nguyên liệu', 'Nhà cung cấp A', 'kg', 1, '', ''], ['NL901', 'Sugar', 'Nguyên liệu', '', 'kg', 1, 'Đường', '']],
-  Gia: [['NL900', 18000, 'Kế hoạch', '2026-01-01', 'Báo giá tháng 1'], ['NL901', 13500, 'Kế hoạch', '2026-01-01', '']],
+  NguyenLieu: [['225400', 'Coconut Water', 'Nguyên liệu', 'Nhà cung cấp A', 'kg', 1, '', ''], ['287833', 'Sugar', 'Nguyên liệu', '', 'kg', 1, 'Đường', '']],
+  Gia: [['225400', 18000, 'Kế hoạch', '2026-01-01', 'Báo giá tháng 1'], ['287833', 13500, 'Kế hoạch', '2026-01-01', '']],
   ChiTieu: [['Đường', '%', 'Có', 0.3]],
-  HamLuong: [['NL900', 'Đường', 2.6, 'Lô 001', 'Phiếu kiểm nghiệm'], ['NL901', 'Đường', 100, 'Lô 001', 'Bảng tham chiếu']],
+  HamLuong: [['225400', 'Đường', 2.6, 'Lô 001', 'Phiếu kiểm nghiệm'], ['287833', 'Đường', 100, 'Lô 001', 'Bảng tham chiếu']],
   SanPham: [['SP900', 'Sản phẩm mẫu', 'Tên khác', 'Nhóm ưu tiên', 10000]],
-  CongThuc: [['SP900', 'Chuẩn', 1, 'Nháp', 'NL900', 80, 1.0526, '', '', 'Không'], ['SP900', 'Chuẩn', 1, 'Nháp', 'NL901', 10, 1.0526, 5, 15, 'Không']],
+  CongThuc: [['SP900', 'Chuẩn', 1, 'Nháp', '225400', 80, 1.0526, '', '', 'Không'], ['SP900', 'Chuẩn', 1, 'Nháp', '287833', 10, 1.0526, 5, 15, 'Không']],
   ChiPhiKhac: [['SP900', 'Chuẩn', 1, 'Bao bì', 'Ly, nắp, nhãn', 747]],
   YeuCau: [['SP900', 'Chuẩn', 1, 'Đường', 7, 9, 0.3]],
 };
 // Bảng "Nguyên liệu + giá" (theo file mẫu của công ty): mỗi dòng là một nguyên liệu kèm giá
-const LIST_HEAD = ['Mã', 'Tên NL', 'Nhóm', 'Đơn vị', 'Nhà cung cấp', 'Giá chưa VAT/g', 'Liều sử dụng'];
+const LIST_HEAD = ['Mã', 'Tên NL', 'Nhóm', 'Đơn vị', 'Nhà cung cấp', 'Gía chưa Vat/g', 'Liều sử dụng'];
 const LIST_SAMPLE = [
-  ['NL900', 'Chất tạo cấu trúc 1', 'Phụ gia', 'g', 'Nhà cung cấp A', 300, '0,1-5'],
-  ['NL901', 'Đường tinh luyện', 'Nguyên liệu', 'g', 'Nhà cung cấp B', 30, '-'],
+  [121345, 'Chất tạo cấu trúc 1', null, 'g', 'Brenntag', 300, '0,1-5'],
+  [412699, 'Đường tinh luyện', null, 'g', 'Biên hòa', 30, '-'],
 ];
 const HELP = [
-  ['HƯỚNG DẪN NHẬP EXCEL'],
-  ['Sheet "NguyenLieu_Gia": mỗi dòng một nguyên liệu kèm giá chưa VAT theo Đơn vị (g, kg, lít, ml, cái). Tiêu đề có thể nằm ở dòng bất kỳ trong 15 dòng đầu.'],
-  ['  • Nhóm để trống: có "Liều sử dụng" thì app xếp là Phụ gia, ngược lại là Nguyên liệu. Nhóm hợp lệ: Nguyên liệu / Phụ gia / Bao bì / Bán thành phẩm.'],
-  ['  • Liều sử dụng: khoảng % khối lượng công thức, ví dụ 0,1-5 hoặc 0,001-1. Điền "-" nếu không giới hạn. App dùng làm giới hạn mặc định khi tối ưu.'],
-  ['  • Mã trùng nhưng tên khác: app tự thêm đuôi (-2, -3…) và nhắc bạn kiểm tra. Loại giá và ngày hiệu lực chọn ở bước xem trước khi nhập.'],
-  ['Các sheet còn lại (ChiTieu, HamLuong, SanPham, CongThuc, ChiPhiKhac, YeuCau) là tùy chọn; giữ nguyên dòng tiêu đề ở dòng 1.'],
-  ['Các dòng ví dụ (mã NL900, SP900…) chỉ minh họa định dạng: hãy xóa/thay bằng dữ liệu thật trước khi nhập.'],
+  ['MẪU NÂNG CAO: CHỈ TIÊU, SẢN PHẨM, CÔNG THỨC'],
+  ['Nguyên liệu và giá nhập bằng "Mẫu nhập nguyên liệu + giá" (nút chính ở màn hình Nhập/Xuất). File này chỉ dùng cho các dữ liệu còn lại, sau khi nguyên liệu đã có trong app.'],
+  ['Cột "Mã nguyên liệu" ở các sheet dưới phải trùng với cột Mã trong file nguyên liệu + giá.'],
+  ['Các sheet (ChiTieu, HamLuong, SanPham, CongThuc, ChiPhiKhac, YeuCau) đều tùy chọn; giữ nguyên dòng tiêu đề ở dòng 1.'],
+  ['Các dòng ví dụ (mã SP900…) chỉ minh họa định dạng: hãy xóa/thay bằng dữ liệu thật trước khi nhập.'],
   ['Công thức được nhận diện bằng bộ ba: Mã SP + Biến thể + Phiên bản. Phiên bản đã có trong app sẽ bị bỏ qua (hãy tăng số phiên bản).'],
   ['Trạng thái công thức: ' + STATUSES.join(' / ') + '. Mặc định là Nháp. Chuyển "Đang sản xuất" cần người duyệt thao tác trong app.'],
   ['Số có dấu thập phân dùng dấu chấm hoặc phẩy đều được. Ngày theo dạng 2026-01-31 hoặc 31/01/2026.'],
   ['(Kiểu cũ vẫn dùng được: sheet NguyenLieu + sheet Gia tách riêng, có Loại giá và Ngày hiệu lực từng dòng.)'],
 ];
-export function downloadTemplate() {
+// Mẫu chính: đúng file "file nguyên liệu + giá.xlsx" của công ty (tải nguyên bản, giữ định dạng)
+export const TEMPLATE_URL = 'templates/file-nguyen-lieu-gia.xlsx';
+export const TEMPLATE_NAME = 'file nguyên liệu + giá.xlsx';
+export async function downloadTemplate() {
+  try {
+    const res = await fetch(TEMPLATE_URL, { cache: 'no-cache' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    download(await res.blob(), TEMPLATE_NAME);
+  } catch {
+    // dự phòng khi không tải được tệp: tạo lại cùng bố cục (dòng 2 là tiêu đề)
+    const ws = X().utils.aoa_to_sheet([[null, null, null, null, null, 1, null], LIST_HEAD, ...LIST_SAMPLE]);
+    ws['!cols'] = [12, 28, 14, 8, 20, 16, 16].map((w) => ({ wch: w }));
+    const wb = X().utils.book_new(); X().utils.book_append_sheet(wb, ws, 'Sheet1');
+    X().writeFile(wb, TEMPLATE_NAME);
+  }
+}
+// Mẫu nâng cao: chỉ tiêu, hàm lượng, sản phẩm, công thức, chi phí khác, yêu cầu chất lượng
+export function downloadTemplateAdvanced() {
   const wb = X().utils.book_new();
   X().utils.book_append_sheet(wb, X().utils.aoa_to_sheet(HELP.map((r) => r)), 'HuongDan');
-  const ws0 = X().utils.aoa_to_sheet([LIST_HEAD, ...LIST_SAMPLE]);
-  ws0['!cols'] = [12, 28, 14, 8, 20, 16, 16].map((w) => ({ wch: w }));
-  X().utils.book_append_sheet(wb, ws0, 'NguyenLieu_Gia');
   for (const [name, head] of Object.entries(SHEETS)) {
-    if (name === 'NguyenLieu' || name === 'Gia') continue; // đã gộp vào NguyenLieu_Gia
+    if (name === 'NguyenLieu' || name === 'Gia') continue; // nguyên liệu + giá dùng mẫu chính
     const ws = X().utils.aoa_to_sheet([head, ...(SAMPLE[name] || [])]);
     ws['!cols'] = head.map((h) => ({ wch: Math.max(14, h.length + 4) }));
     X().utils.book_append_sheet(wb, ws, name);
   }
-  X().writeFile(wb, 'Mau_nhap_du_lieu.xlsx');
+  X().writeFile(wb, 'Mau_nang_cao_cong_thuc.xlsx');
 }
 
 // ---------- đọc & kiểm tra file nhập ----------
@@ -188,12 +200,21 @@ export async function planImport(file) {
       seenInFile.set(lc, name.toLowerCase());
       const ex = ingByCode.get(lc);
       if (ex && ex.name.trim().toLowerCase() !== name.toLowerCase()) lwarn(L.sheet, rowNo, 'Mã ' + code + ' đã có trong app với tên "' + ex.name + '": sẽ đổi thành "' + name + '".');
+      // nguyên liệu đã có với đơn vị giá khác: giữ đơn vị cũ và quy đổi giá, để lịch sử giá không bị sai
+      let priceOut = price; let unitOut = unit;
+      if (ex && ex.priceUnit !== unit) {
+        const fam = (u) => (['kg', 'g'].includes(u) ? 'khối lượng' : ['lít', 'ml'].includes(u) ? 'thể tích' : 'cái');
+        if (fam(ex.priceUnit) !== fam(unit)) { warn(L.sheet, rowNo, 'Đơn vị "' + unit + '" khác loại với đơn vị đang dùng trong app ("' + ex.priceUnit + '") của "' + name + '": bỏ qua dòng.'); continue; }
+        unitOut = ex.priceUnit;
+        if (price != null) priceOut = Math.round(((price * UNIT_F[ex.priceUnit]) / UNIT_F[unit]) * 1e6) / 1e6;
+        lwarn(L.sheet, rowNo, '"' + name + '": file tính theo ' + unit + ', app tính theo ' + ex.priceUnit + '. Giá đã quy đổi (' + price + ' đ/' + unit + ' = ' + priceOut + ' đ/' + ex.priceUnit + ').');
+      }
       const dose = parseDose(row[L.cols.dose >= 0 ? L.cols.dose : 0 - 1]);
       let cat = L.cols.cat >= 0 ? str(row[L.cols.cat]) : '';
       const catExplicit = !!cat;
       if (!cat) { cat = ex ? ex.category : dose && !dose.bad ? 'Phụ gia' : 'Nguyên liệu'; if (!ex) inferred++; }
       const d = ex || { id: uid(), code, name, category: cat, supplier: '', priceUnit: unit, yield: 1, substGroup: '', bomFormulaId: '', stock: null, moq: null, supplyNote: '', lots: [], activeLotId: '', active: true, note: '' };
-      d.name = name; d.priceUnit = unit; if (catExplicit || !ex) d.category = cat;
+      d.name = name; d.priceUnit = unitOut; if (catExplicit || !ex) d.category = cat;
       if (L.cols.sup >= 0 && str(row[L.cols.sup])) d.supplier = str(row[L.cols.sup]);
       if (L.cols.dose >= 0) {
         if (dose?.bad) lwarn(L.sheet, rowNo, 'Liều sử dụng "' + dose.text + '" của "' + name + '" không đọc được: bỏ qua giới hạn liều.');
@@ -201,7 +222,7 @@ export async function planImport(file) {
       }
       addList('categories', d.category); addList('suppliers', d.supplier);
       ingByCode.set(lc, d); touchedIng.add(lc); stat.ing[ex ? 1 : 0]++;
-      if (price != null) plan.listPrices.push({ ing: d, price, row: rowNo });
+      if (priceOut != null) plan.listPrices.push({ ing: d, price: priceOut, row: rowNo });
     }
   }
   if (inferred) lwarn('', '', inferred + ' nguyên liệu để trống Nhóm: app tự xếp (có liều sử dụng = Phụ gia, còn lại = Nguyên liệu). Sửa lại nếu chưa đúng.');
@@ -360,14 +381,24 @@ export function exportSimulation(ctx, r) {
   for (const x of r.list) aoa.push([fLabel(ctx, x.f), Math.round(x.a * 100) / 100, Math.round(x.b * 100) / 100, Math.round(x.d * 100) / 100, Math.round(x.p * 100) / 100]);
   book([['MoPhong', aoa, [40, 14, 14, 12, 10]]], 'Mo_phong_gia.xlsx');
 }
-export function exportPriceList() {
-  const ctx = mkCtx();
-  const aoa = [['Mã', 'Nguyên liệu', 'Nhóm', 'Nhà cung cấp', 'Đơn vị', 'Giá kế hoạch', 'Giá thực tế', 'Giá ước tính']];
-  for (const i of all('ingredients').sort((a, b) => a.code.localeCompare(b.code))) {
-    const m = ctx.priceIdx.get(i.id) || {};
-    aoa.push([i.code, i.name, i.category, i.supplier || '', i.priceUnit, m['Kế hoạch']?.price ?? '', m['Thực tế']?.price ?? '', m['Ước tính']?.price ?? '']);
+// Bảng nguyên liệu + giá, cùng bố cục với file mẫu (xuất ra có thể sửa rồi nhập lại).
+// Giá quy về đ/g (hoặc đ/ml, đ/cái) để đúng với tiêu đề "Giá chưa VAT/g".
+export function priceListAoa(basis) {
+  const ctx = mkCtx(); const loai = basis || 'Kế hoạch';
+  const aoa = [[null, null, null, null, null, 1, null], LIST_HEAD];
+  const items = all('ingredients').filter((i) => !i.bomFormulaId).sort((a, b) => String(a.code).localeCompare(String(b.code), 'vi', { numeric: true }));
+  for (const i of items) {
+    const lp = latestPrice(ctx, i.id, loai);
+    const f = UNIT_F[i.priceUnit] || 1;
+    const unit = i.priceUnit === 'kg' ? 'g' : i.priceUnit === 'lít' ? 'ml' : i.priceUnit;
+    const price = lp ? Math.round((lp.price / f) * 1e6) / 1e6 : '';
+    aoa.push([/^\d+$/.test(i.code) ? Number(i.code) : i.code, i.name, i.category || '', unit, i.supplier || '', price, i.doseText || (i.doseMin != null || i.doseMax != null ? `${i.doseMin ?? 0}-${i.doseMax ?? ''}`.replace(/\./g, ',') : '-')]);
   }
-  book([['BangGia', aoa, [10, 34, 14, 20, 8, 14, 14, 14]]], 'Bang_gia_nguyen_lieu.xlsx');
+  return aoa;
+}
+export function exportPriceList(basis) {
+  const loai = basis || getSettings().defaultBasis;
+  book([['Sheet1', priceListAoa(loai), [12, 28, 14, 8, 20, 16, 16]]], 'Nguyen_lieu_gia_' + normalize(loai).replace(/\s+/g, '_') + '_' + today() + '.xlsx');
 }
 export function exportCostBoard() {
   const ctx = mkCtx(); const basis = 'Kế hoạch';
