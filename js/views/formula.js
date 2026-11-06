@@ -56,10 +56,10 @@ export async function render(el, id, { rerender }) {
 
   // ---------- nguyên liệu ----------
   const linesBox = h('div', { class: 'lines' });
-  const lineCostEls = new Map(); const lineHaoEls = new Map();
+  const lineCostEls = new Map(); const lineHaoEls = new Map(); const lineDoseEls = new Map();
   const ingOptions = () => all('ingredients').filter((i) => i.active !== false).sort((a, b) => byName(a.name, b.name)).map((i) => ({ value: i.id, label: i.name, sub: i.code + ' · ' + i.category }));
   function renderLines() {
-    clear(linesBox); lineCostEls.clear(); lineHaoEls.clear();
+    clear(linesBox); lineCostEls.clear(); lineHaoEls.clear(); lineDoseEls.clear();
     if (!draft.lines.length) linesBox.append(h('div', { class: 'empty' }, 'Chưa có nguyên liệu. Bấm "Thêm nguyên liệu".'));
     for (const l of draft.lines) linesBox.append(lineRow(l));
   }
@@ -68,8 +68,9 @@ export async function render(el, id, { rerender }) {
     const unit = ing?.priceUnit && isMass(ing) ? 'g' : ing?.priceUnit || 'g';
     const costEl = h('div', { class: 'cost' }, '—'); lineCostEls.set(l.id, costEl);
     const haoEl = h('div', { class: 'small muted' }, ''); lineHaoEls.set(l.id, haoEl);
+    const doseEl = h('div', { class: 'small muted' }, ''); lineDoseEls.set(l.id, doseEl);
     const row = h('div', { class: 'line' },
-      h('div', { class: 'c-ing' }, h('span', { class: 'lb small muted' }, 'Nguyên liệu'), picker({ options: ingOptions(), value: l.ingId, placeholder: 'Chọn nguyên liệu…', title: 'Chọn nguyên liệu', disabled: !editable, onChange: (v) => { l.ingId = v; mark(); renderLines(); refresh(); } }), ing?.bomFormulaId ? chip('Bán thành phẩm', 'pri') : null),
+      h('div', { class: 'c-ing' }, h('span', { class: 'lb small muted' }, 'Nguyên liệu'), picker({ options: ingOptions(), value: l.ingId, placeholder: 'Chọn nguyên liệu…', title: 'Chọn nguyên liệu', disabled: !editable, onChange: (v) => { l.ingId = v; mark(); renderLines(); refresh(); } }), ing?.bomFormulaId ? chip('Bán thành phẩm', 'pri') : null, doseEl),
       h('label', { class: 'fld c-sm' }, h('span', { class: 'lb' }, 'Lượng (' + unit + ')'), numInput({ value: l.qty, readOnly: !editable, onInput: (v) => { l.qty = v ?? 0; mark(); refresh(); } })),
       h('label', { class: 'fld c-sm' }, h('span', { class: 'lb' }, 'Định mức (yield)'), numInput({ value: l.yield, placeholder: String(ing?.yield ?? 1), readOnly: !editable, onInput: (v) => { l.yield = v; mark(); refresh(); } }), haoEl),
       h('label', { class: 'fld c-sm' }, h('span', { class: 'lb' }, 'Min %'), numInput({ value: l.minPct, readOnly: !editable, onInput: (v) => { l.minPct = v; mark(); } })),
@@ -140,6 +141,16 @@ export async function render(el, id, { rerender }) {
       const ce = lineCostEls.get(l.id); if (ce) ce.textContent = l.missing ? (l.ingId ? 'Thiếu giá' : '—') : vnd(l.cost);
       const he = lineHaoEls.get(l.id); if (he) he.textContent = l.y > 0 ? 'Hao hụt ' + num((1 - 1 / l.y) * 100, 1) + '%' : '';
       const row = ce?.closest('.line'); row?.classList.toggle('miss', !!l.missing && !!l.ingId);
+      const de = lineDoseEls.get(l.id);
+      if (de) {
+        const dmin = l.ing?.doseMin, dmax = l.ing?.doseMax;
+        if (dmin != null || dmax != null) {
+          const pc = c.weight ? (l.qty / c.weight) * 100 : 0;
+          const out = (dmax != null && pc > dmax + 1e-6) ? 'vượt liều tối đa' : (dmin != null && pc < dmin - 1e-6) ? 'dưới liều tối thiểu' : '';
+          de.textContent = 'Liều ' + (dmin != null ? num(dmin, 3) : '0') + '–' + (dmax != null ? num(dmax, 3) : '∞') + '% · hiện ' + num(pc, 2) + '%' + (out ? ' ⚠ ' + out : '');
+          de.className = 'small ' + (out ? 'delta-up' : 'muted');
+        } else de.textContent = '';
+      }
     }
     const qs = qualitySummary(ctx, draft, c);
     for (const row of qs.rows) {

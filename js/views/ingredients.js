@@ -94,6 +94,9 @@ export function edit(orig, startTab, onDone) {
         field('Nhóm thay thế', listSelect({ key: 'substGroups', value: d.substGroup, onChange: (v) => (d.substGroup = v), disabled: !canEdit }), 'Tối ưu có thể đề xuất đổi trong cùng nhóm (cần test lại)'),
         field('Tồn kho (g)', numInput({ value: d.stock, onInput: (v) => (d.stock = v), readOnly: !canEdit })),
         field('Số lượng đặt tối thiểu', numInput({ value: d.moq, onInput: (v) => (d.moq = v), readOnly: !canEdit }))),
+      h('div', { class: 'grid2' },
+        field('Liều sử dụng tối thiểu (% khối lượng công thức)', numInput({ value: d.doseMin, onInput: (v) => (d.doseMin = v), readOnly: !canEdit }), 'Để trống = không giới hạn dưới'),
+        field('Liều sử dụng tối đa (%)', numInput({ value: d.doseMax, onInput: (v) => (d.doseMax = v), readOnly: !canEdit }), 'Làm giới hạn mặc định khi tối ưu và cảnh báo trong công thức')),
       field('Giới hạn nguồn cung / ghi chú', textInput({ value: d.supplyNote, onInput: (v) => (d.supplyNote = v), readOnly: !canEdit })),
       checkbox('Đang sử dụng (bỏ chọn để ẩn khỏi danh sách chọn)', d.active !== false, (v) => (d.active = v)),
       field('Ghi chú', Object.assign(h('textarea', { readOnly: !canEdit, onInput: (e) => (d.note = e.target.value) }), { value: d.note || '' })));

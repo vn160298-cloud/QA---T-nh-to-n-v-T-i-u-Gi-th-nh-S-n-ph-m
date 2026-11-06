@@ -20,8 +20,11 @@ function prepare(ctx, f, opt) {
     const locked = l.fixed || opt.fixed.has(l.ing.id);
     if (locked) { lo = hi = l.qty; }
     else {
-      const hardLo = l.minPct != null && l.minPct !== '' ? (Number(l.minPct) / 100) * W : 0;
-      const hardHi = l.maxPct != null && l.maxPct !== '' ? (Number(l.maxPct) / 100) * W : W;
+      // giới hạn tỷ lệ: ưu tiên Min/Max của dòng công thức, nếu trống thì dùng "liều sử dụng" của nguyên liệu
+      const pLo = l.minPct != null && l.minPct !== '' ? Number(l.minPct) : l.ing.doseMin;
+      const pHi = l.maxPct != null && l.maxPct !== '' ? Number(l.maxPct) : l.ing.doseMax;
+      const hardLo = pLo != null ? (Number(pLo) / 100) * W : 0;
+      const hardHi = pHi != null ? (Number(pHi) / 100) * W : W;
       lo = Math.max(lo, hardLo); hi = Math.min(hi, hardHi);
       if (lo > hi) lo = hi = Math.min(Math.max(l.qty, hardLo), hardHi);
     }

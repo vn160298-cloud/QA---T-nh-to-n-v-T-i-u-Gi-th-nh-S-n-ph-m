@@ -76,6 +76,18 @@ Mở từ biểu tượng mới sẽ chạy toàn màn hình, không có thanh �
 Ở chế độ thử: **Thêm → Nhập/Xuất Excel → Sao lưu** (file JSON). Kết nối đám mây, đăng nhập bằng tài khoản Quản trị, rồi **Khôi phục từ file**.
 Dữ liệu thật của công ty nên nhập bằng **Mẫu nhập Excel** (cùng màn hình đó). Mẫu có sheet hướng dẫn và các dòng ví dụ.
 
+**Nhập nguyên liệu và giá từ một bảng** (sheet `NguyenLieu_Gia`, đúng bố cục file "file nguyên liệu + giá.xlsx"):
+
+| Mã | Tên NL | Nhóm | Đơn vị | Nhà cung cấp | Giá chưa VAT | Liều sử dụng |
+|---|---|---|---|---|---|---|
+| 121345 | Chất tạo cấu trúc 1 | (trống) | g | Brenntag | 300 | 0,1-5 |
+
+- Dòng tiêu đề có thể ở dòng bất kỳ trong 15 dòng đầu. Giá hiểu là **chưa VAT theo cột Đơn vị** (300 đ/g).
+- **Nhóm trống**: có Liều sử dụng thì xếp Phụ gia, còn lại là Nguyên liệu. Nên điền cột Nhóm cho chính xác.
+- **Liều sử dụng** (`0,1-5`, `-` là không giới hạn) hiểu là khoảng % khối lượng công thức; dùng làm giới hạn mặc định khi tối ưu và cảnh báo trong công thức.
+- **Mã trùng, tên khác**: app đổi thành `mã-2`, `mã-3`… và báo ở phần "Lưu ý". Hãy sửa mã trong file gốc.
+- Loại giá và ngày hiệu lực chọn ở bước xem trước. Nhập lại file: giá không đổi thì bỏ qua, giá đổi thì thêm vào lịch sử, không tạo nguyên liệu trùng.
+
 ## 8. Việc cần làm cho bảo mật
 
 - Bật xác thực hai lớp (MFA) cho tài khoản Supabase và tài khoản Quản trị.

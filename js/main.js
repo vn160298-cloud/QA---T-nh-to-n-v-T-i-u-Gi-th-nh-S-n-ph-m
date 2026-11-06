@@ -51,6 +51,16 @@ export function installApp() {
 }
 
 // ---------- đăng nhập ----------
+function friendlyAuthError(e) {
+  const m = String(e?.message || e || '');
+  if (/signups? not allowed|signup.*disabled/i.test(m)) return 'Supabase đang tắt chức năng đăng ký. Quản trị hãy bật "Allow new users to sign up" (Authentication → Sign In / Providers) hoặc tạo người dùng tại Authentication → Users → Add user.';
+  if (/invalid login credentials/i.test(m)) return 'Sai email hoặc mật khẩu.';
+  if (/email not confirmed/i.test(m)) return 'Email chưa được xác nhận. Hãy bấm liên kết trong email Supabase đã gửi.';
+  if (/already registered|already been registered/i.test(m)) return 'Email này đã có tài khoản. Hãy đăng nhập.';
+  if (/rate limit/i.test(m)) return 'Thử quá nhiều lần, vui lòng chờ ít phút rồi thử lại.';
+  if (/failed to fetch|networkerror/i.test(m)) return 'Không kết nối được máy chủ. Kiểm tra mạng và địa chỉ Project URL trong config.js.';
+  return m;
+}
 function authScreen(msg) {
   clear(app);
   let mode = 'in';
@@ -71,7 +81,7 @@ function authScreen(msg) {
         if (!logged) { toast('Đã tạo tài khoản. Hãy kiểm tra email để xác nhận (nếu được yêu cầu) rồi đăng nhập.', 'ok'); mode = 'in'; setMode(); btn.disabled = false; return; }
       }
       boot();
-    } catch (ex) { err.textContent = ex.message || String(ex); err.classList.remove('hide'); btn.disabled = false; }
+    } catch (ex) { err.textContent = friendlyAuthError(ex); err.classList.remove('hide'); btn.disabled = false; }
   } },
   h('label', { class: 'fld' }, 'Email', email), nameWrap, h('label', { class: 'fld' }, 'Mật khẩu', pass), err, btn, sw);
   const setMode = () => {

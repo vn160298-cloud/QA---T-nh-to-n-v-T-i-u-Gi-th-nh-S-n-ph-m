@@ -27,20 +27,33 @@ const SAMPLE = {
   ChiPhiKhac: [['SP900', 'Chuẩn', 1, 'Bao bì', 'Ly, nắp, nhãn', 747]],
   YeuCau: [['SP900', 'Chuẩn', 1, 'Đường', 7, 9, 0.3]],
 };
+// Bảng "Nguyên liệu + giá" (theo file mẫu của công ty): mỗi dòng là một nguyên liệu kèm giá
+const LIST_HEAD = ['Mã', 'Tên NL', 'Nhóm', 'Đơn vị', 'Nhà cung cấp', 'Giá chưa VAT/g', 'Liều sử dụng'];
+const LIST_SAMPLE = [
+  ['NL900', 'Chất tạo cấu trúc 1', 'Phụ gia', 'g', 'Nhà cung cấp A', 300, '0,1-5'],
+  ['NL901', 'Đường tinh luyện', 'Nguyên liệu', 'g', 'Nhà cung cấp B', 30, '-'],
+];
 const HELP = [
   ['HƯỚNG DẪN NHẬP EXCEL'],
-  ['Mỗi sheet là một loại dữ liệu; giữ nguyên dòng tiêu đề (dòng 1). Có thể bỏ qua sheet không cần.'],
-  ['Các dòng ví dụ (mã NL900, SP900…) chỉ để minh họa định dạng: hãy xóa/thay bằng dữ liệu thật trước khi nhập.'],
-  ['Nhóm nguyên liệu: Nguyên liệu / Phụ gia / Bao bì / Bán thành phẩm. Đơn vị giá: ' + UNITS.join(', ') + '.'],
-  ['Giá tính theo đơn vị giá của nguyên liệu (VD kg), công thức nhập lượng theo gam. Loại giá: Kế hoạch / Thực tế / Ước tính.'],
+  ['Sheet "NguyenLieu_Gia": mỗi dòng một nguyên liệu kèm giá chưa VAT theo Đơn vị (g, kg, lít, ml, cái). Tiêu đề có thể nằm ở dòng bất kỳ trong 15 dòng đầu.'],
+  ['  • Nhóm để trống: có "Liều sử dụng" thì app xếp là Phụ gia, ngược lại là Nguyên liệu. Nhóm hợp lệ: Nguyên liệu / Phụ gia / Bao bì / Bán thành phẩm.'],
+  ['  • Liều sử dụng: khoảng % khối lượng công thức, ví dụ 0,1-5 hoặc 0,001-1. Điền "-" nếu không giới hạn. App dùng làm giới hạn mặc định khi tối ưu.'],
+  ['  • Mã trùng nhưng tên khác: app tự thêm đuôi (-2, -3…) và nhắc bạn kiểm tra. Loại giá và ngày hiệu lực chọn ở bước xem trước khi nhập.'],
+  ['Các sheet còn lại (ChiTieu, HamLuong, SanPham, CongThuc, ChiPhiKhac, YeuCau) là tùy chọn; giữ nguyên dòng tiêu đề ở dòng 1.'],
+  ['Các dòng ví dụ (mã NL900, SP900…) chỉ minh họa định dạng: hãy xóa/thay bằng dữ liệu thật trước khi nhập.'],
   ['Công thức được nhận diện bằng bộ ba: Mã SP + Biến thể + Phiên bản. Phiên bản đã có trong app sẽ bị bỏ qua (hãy tăng số phiên bản).'],
-  ['Trạng thái: ' + STATUSES.join(' / ') + '. Mặc định là Nháp. Chuyển "Đang sản xuất" cần người duyệt thao tác trong app.'],
+  ['Trạng thái công thức: ' + STATUSES.join(' / ') + '. Mặc định là Nháp. Chuyển "Đang sản xuất" cần người duyệt thao tác trong app.'],
   ['Số có dấu thập phân dùng dấu chấm hoặc phẩy đều được. Ngày theo dạng 2026-01-31 hoặc 31/01/2026.'],
+  ['(Kiểu cũ vẫn dùng được: sheet NguyenLieu + sheet Gia tách riêng, có Loại giá và Ngày hiệu lực từng dòng.)'],
 ];
 export function downloadTemplate() {
   const wb = X().utils.book_new();
   X().utils.book_append_sheet(wb, X().utils.aoa_to_sheet(HELP.map((r) => r)), 'HuongDan');
+  const ws0 = X().utils.aoa_to_sheet([LIST_HEAD, ...LIST_SAMPLE]);
+  ws0['!cols'] = [12, 28, 14, 8, 20, 16, 16].map((w) => ({ wch: w }));
+  X().utils.book_append_sheet(wb, ws0, 'NguyenLieu_Gia');
   for (const [name, head] of Object.entries(SHEETS)) {
+    if (name === 'NguyenLieu' || name === 'Gia') continue; // đã gộp vào NguyenLieu_Gia
     const ws = X().utils.aoa_to_sheet([head, ...(SAMPLE[name] || [])]);
     ws['!cols'] = head.map((h) => ({ wch: Math.max(14, h.length + 4) }));
     X().utils.book_append_sheet(wb, ws, name);
@@ -78,6 +91,42 @@ function toDate(v) {
   return null;
 }
 
+// ----- bảng "Nguyên liệu + giá" (file mẫu của công ty) -----
+const STD = new Set([...Object.keys(SHEETS).map(key), 'huongdan']);
+const UNIT_ALIAS = { g: 'g', gam: 'g', gram: 'g', kg: 'kg', kilogram: 'kg', lit: 'lít', l: 'lít', ml: 'ml', cai: 'cái', chiec: 'cái' };
+// "0,1-5" -> {min:0.1, max:5}; "-" hoặc trống -> null (không giới hạn)
+function parseDose(v) {
+  const s = String(v ?? '').trim().replace(/%/g, '');
+  if (!s || /^[-–—\s]+$/.test(s)) return null;
+  const nums = s.split(/\s*[-–—~]\s*/).filter(Boolean).map((x) => parseNum(x)).filter((n) => n != null);
+  if (!nums.length) return { bad: true, text: s };
+  return nums.length === 1 ? { min: null, max: nums[0], text: s } : { min: Math.min(nums[0], nums[1]), max: Math.max(nums[0], nums[1]), text: s };
+}
+function findList(wb) {
+  const found = [];
+  for (const name of wb.SheetNames) {
+    if (STD.has(key(name))) continue;
+    const aoa = X().utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: '', raw: true });
+    for (let hr = 0; hr < Math.min(15, aoa.length); hr++) {
+      const heads = aoa[hr].map(key);
+      const col = (pred) => heads.findIndex(pred);
+      const cCode = col((h) => h === 'ma' || h === 'manguyenlieu' || h === 'manl' || h === 'mavt' || h === 'mahang');
+      const cName = col((h) => h.startsWith('ten'));
+      if (cCode < 0 || cName < 0) continue;
+      found.push({ sheet: name, aoa, hr, header: aoa[hr], cols: {
+        code: cCode, name: cName,
+        cat: col((h) => h === 'nhom' || h === 'phanloai' || h === 'loai'),
+        unit: col((h) => h === 'donvi' || h === 'dvt' || h === 'dvtinh'),
+        sup: col((h) => h.includes('nhacungcap') || h === 'ncc'),
+        price: col((h) => h.includes('gia') && !h.includes('loaigia')),
+        dose: col((h) => h.includes('lieu')),
+      } });
+      break;
+    }
+  }
+  return found;
+}
+
 export async function planImport(file) {
   const buf = await file.arrayBuffer();
   const wb = X().read(buf, { type: 'array', cellDates: false });
@@ -105,6 +154,58 @@ export async function planImport(file) {
     addList('categories', d.category); addList('suppliers', d.supplier); addList('substGroups', d.substGroup);
     ingByCode.set(code.toLowerCase(), d); touchedIng.add(code.toLowerCase()); stat.ing[ex ? 1 : 0]++;
   }
+  // bảng "Nguyên liệu + giá" (mỗi dòng: mã, tên, nhóm, đơn vị, nhà cung cấp, giá chưa VAT, liều sử dụng)
+  plan.listPrices = []; plan.warnings = []; plan.opts = { type: 'Kế hoạch', date: today() };
+  const seenInFile = new Map(); let inferred = 0;
+  const lwarn = (sheet, row, msg) => plan.warnings.push({ sheet, row, msg });
+  for (const L of findList(wb)) {
+    const hdrUnit = L.cols.price >= 0 ? (/\/\s*(kg|g|lit|ml|cai)\b/.exec(normalize(String(L.header[L.cols.price]))) || [])[1] : '';
+    for (let r = L.hr + 1; r < L.aoa.length; r++) {
+      const row = L.aoa[r]; const rowNo = r + 1;
+      if (row.every((c) => c === '' || c == null)) continue;
+      let code = str(row[L.cols.code]); const name = str(row[L.cols.name]);
+      if (!code && !name) continue;
+      if (!name) { warn(L.sheet, rowNo, 'Thiếu tên nguyên liệu'); continue; }
+      if (!code) { warn(L.sheet, rowNo, 'Thiếu mã của "' + name + '"'); continue; }
+      const unitRaw = L.cols.unit >= 0 ? str(row[L.cols.unit]) : '';
+      const unit = unitRaw ? UNIT_ALIAS[key(unitRaw)] : (UNIT_ALIAS[key(hdrUnit || '')] || (hdrUnit ? 'g' : 'kg'));
+      if (!unit) { warn(L.sheet, rowNo, 'Đơn vị "' + unitRaw + '" không hợp lệ (dùng: ' + UNITS.join(', ') + ')'); continue; }
+      const price = L.cols.price >= 0 ? parseNum(row[L.cols.price]) : null;
+      if (price != null && price < 0) { warn(L.sheet, rowNo, 'Giá âm của "' + name + '"'); continue; }
+      let lc = code.toLowerCase();
+      if (seenInFile.has(lc)) {
+        if (seenInFile.get(lc) === name.toLowerCase()) { lwarn(L.sheet, rowNo, 'Dòng lặp "' + name + '" (mã ' + code + '): bỏ qua'); continue; }
+        // đã từng nhập (cùng tên, mã có đuôi) thì dùng lại mã đó, tránh tạo bản trùng khi nhập lại file
+        const again = [...ingByCode.values()].find((i) => i.code.toLowerCase().startsWith(lc + '-') && i.name.trim().toLowerCase() === name.toLowerCase());
+        if (again) { code = again.code; lc = code.toLowerCase(); }
+        else {
+          let n = 2; while (seenInFile.has((code + '-' + n).toLowerCase()) || ingByCode.has((code + '-' + n).toLowerCase())) n++;
+          const nc = code + '-' + n;
+          lwarn(L.sheet, rowNo, 'Mã ' + code + ' trùng với nguyên liệu khác trong file: "' + name + '" được đổi mã thành ' + nc + '. Hãy kiểm tra lại mã trong file nguồn.');
+          code = nc; lc = nc.toLowerCase();
+        }
+      }
+      seenInFile.set(lc, name.toLowerCase());
+      const ex = ingByCode.get(lc);
+      if (ex && ex.name.trim().toLowerCase() !== name.toLowerCase()) lwarn(L.sheet, rowNo, 'Mã ' + code + ' đã có trong app với tên "' + ex.name + '": sẽ đổi thành "' + name + '".');
+      const dose = parseDose(row[L.cols.dose >= 0 ? L.cols.dose : 0 - 1]);
+      let cat = L.cols.cat >= 0 ? str(row[L.cols.cat]) : '';
+      const catExplicit = !!cat;
+      if (!cat) { cat = ex ? ex.category : dose && !dose.bad ? 'Phụ gia' : 'Nguyên liệu'; if (!ex) inferred++; }
+      const d = ex || { id: uid(), code, name, category: cat, supplier: '', priceUnit: unit, yield: 1, substGroup: '', bomFormulaId: '', stock: null, moq: null, supplyNote: '', lots: [], activeLotId: '', active: true, note: '' };
+      d.name = name; d.priceUnit = unit; if (catExplicit || !ex) d.category = cat;
+      if (L.cols.sup >= 0 && str(row[L.cols.sup])) d.supplier = str(row[L.cols.sup]);
+      if (L.cols.dose >= 0) {
+        if (dose?.bad) lwarn(L.sheet, rowNo, 'Liều sử dụng "' + dose.text + '" của "' + name + '" không đọc được: bỏ qua giới hạn liều.');
+        d.doseMin = dose && !dose.bad ? dose.min : null; d.doseMax = dose && !dose.bad ? dose.max : null; d.doseText = dose && !dose.bad ? dose.text : '';
+      }
+      addList('categories', d.category); addList('suppliers', d.supplier);
+      ingByCode.set(lc, d); touchedIng.add(lc); stat.ing[ex ? 1 : 0]++;
+      if (price != null) plan.listPrices.push({ ing: d, price, row: rowNo });
+    }
+  }
+  if (inferred) lwarn('', '', inferred + ' nguyên liệu để trống Nhóm: app tự xếp (có liều sử dụng = Phụ gia, còn lại = Nguyên liệu). Sửa lại nếu chưa đúng.');
+  stat.price += plan.listPrices.length;
   // chỉ tiêu
   for (const r of sheetRows(wb, 'ChiTieu') || []) {
     const name = str(r['Tên chỉ tiêu']); if (!name) { warn('ChiTieu', r._row, 'Thiếu tên chỉ tiêu'); continue; }
@@ -200,6 +301,18 @@ export async function applyImport(plan) {
   if (plan.ingredients.length) await saveMany('ingredients', plan.ingredients, 'Nhập Excel: nguyên liệu');
   if (plan.criteria.length) await saveMany('criteria', plan.criteria, 'Nhập Excel: chỉ tiêu');
   if (plan.products.length) await saveMany('products', plan.products, 'Nhập Excel: sản phẩm');
+  // giá từ bảng "Nguyên liệu + giá": áp loại giá / ngày hiệu lực chọn ở bước xem trước; bỏ qua giá không đổi
+  if (plan.listPrices?.length) {
+    const ctx = mkCtx(); const o = plan.opts || { type: 'Kế hoạch', date: today() };
+    const docs = [];
+    for (const lp of plan.listPrices) {
+      const cur = ctx.priceIdx.get(lp.ing.id)?.[o.type];
+      if (cur && Number(cur.price) === Number(lp.price)) continue;
+      docs.push({ id: uid(), ingId: lp.ing.id, price: lp.price, type: o.type, date: o.date, source: 'Nhập Excel', note: 'Giá chưa VAT' });
+    }
+    if (docs.length) await saveMany('prices', docs, 'Nhập Excel: giá nguyên liệu');
+    plan.pricesWritten = docs.length;
+  }
   if (plan.prices.length) await saveMany('prices', plan.prices, 'Nhập Excel: giá');
   if (plan.formulas.length) await saveMany('formulas', plan.formulas, 'Nhập Excel: công thức');
   await refreshSnapshots();
